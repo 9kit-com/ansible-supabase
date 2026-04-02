@@ -1,0 +1,5 @@
+name: ansible-supabase
+title: Ansible Supabase
+version: '1.0'
+nav:
+  - modules/ROOT/nav.adoc

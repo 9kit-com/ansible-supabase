@@ -1,0 +1,27 @@
+= Ansible Supabase
+
+This Antora component is published as part of the main documentation site in `../documentation`.
+
+== What This Repository Contains
+
+* An Ansible playbook for provisioning a self-hosted Supabase deployment
+* Roles for Docker, Caddy, monitoring, fail2ban, and the Supabase stack itself
+* Environment templates and bootstrap scripts for repeatable server setup
+
+== Primary Entry Points
+
+* `playbook-supabase.yml`
+* `env/supabase.yml`
+* `install.sh`
+
+== Build The Docs
+
+Build the combined site from the main documentation repository:
+
+[source,bash]
+----
+cd ../documentation
+npm run build
+----
+
+This component is loaded from the `9kit-com/ansible-supabase` GitHub repository by the main Antora playbook.

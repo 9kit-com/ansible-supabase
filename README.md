@@ -127,3 +127,14 @@ Use the following script to install Ansible, Git and execute all roles:
 sudo ./install.sh
 ```
 </details>
+
+## Documentation
+
+This repository now includes an Antora component in `docs/`.
+
+```bash
+cd ../documentation
+npm run build
+```
+
+The main Antora playbook in `../documentation` loads this repository from `https://github.com/9kit-com/ansible-supabase` with `start_path: docs`.
