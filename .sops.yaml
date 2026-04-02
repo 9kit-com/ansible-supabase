@@ -1,0 +1,3 @@
+creation_rules:
+  - path_regex: ^secrets/.*$
+    gcp_kms: projects/chrishutchison-dev/locations/us-central1/keyRings/sops-keyring/cryptoKeys/sops-key
