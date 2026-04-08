@@ -1,0 +1,105 @@
+name: Nightly Supabase Backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 5 * * *"
+
+concurrency:
+  group: supabase-nightly-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' '${{ secrets.BACKUP_SSH_PRIVATE_KEY }}' > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' '${{ secrets.BACKUP_SSH_KNOWN_HOSTS }}' > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Run backup on server
+        shell: bash
+        env:
+          BACKUP_SSH_HOST: ${{ secrets.BACKUP_SSH_HOST }}
+          BACKUP_SSH_PORT: ${{ secrets.BACKUP_SSH_PORT }}
+          BACKUP_SSH_USER: ${{ secrets.BACKUP_SSH_USER }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_PREFIX: ${{ secrets.R2_PREFIX }}
+        run: |
+          set -euo pipefail
+
+          : "${BACKUP_SSH_HOST:?Missing BACKUP_SSH_HOST secret}"
+          : "${BACKUP_SSH_USER:?Missing BACKUP_SSH_USER secret}"
+          : "${SUPABASE_DB_PASSWORD:?Missing SUPABASE_DB_PASSWORD secret}"
+          : "${R2_ACCESS_KEY_ID:?Missing R2_ACCESS_KEY_ID secret}"
+          : "${R2_SECRET_ACCESS_KEY:?Missing R2_SECRET_ACCESS_KEY secret}"
+          : "${R2_BUCKET:?Missing R2_BUCKET secret}"
+          : "${R2_ACCOUNT_ID:?Missing R2_ACCOUNT_ID secret}"
+
+          SSH_PORT="${BACKUP_SSH_PORT:-22}"
+          REMOTE="${BACKUP_SSH_USER}@${BACKUP_SSH_HOST}"
+          REMOTE_PREFIX="${R2_PREFIX:-supabase-db}"
+          quote() {
+            printf "%q" "$1"
+          }
+
+          ssh -p "${SSH_PORT}" "${REMOTE}" \
+            "SUPABASE_DB_PASSWORD=$(quote "${SUPABASE_DB_PASSWORD}") \
+             R2_ACCESS_KEY_ID=$(quote "${R2_ACCESS_KEY_ID}") \
+             R2_SECRET_ACCESS_KEY=$(quote "${R2_SECRET_ACCESS_KEY}") \
+             R2_BUCKET=$(quote "${R2_BUCKET}") \
+             R2_ACCOUNT_ID=$(quote "${R2_ACCOUNT_ID}") \
+             R2_PREFIX=$(quote "${REMOTE_PREFIX}") \
+             bash -s" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+
+          if ! command -v pg_dump >/dev/null 2>&1 || ! command -v aws >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client awscli
+          fi
+
+          export PGHOST="127.0.0.1"
+          export PGPORT="5432"
+          export PGUSER="postgres"
+          export PGPASSWORD="${SUPABASE_DB_PASSWORD}"
+          export PGDATABASE="postgres"
+
+          BACKUP_ROOT="/var/backups/supabase"
+          STAMP="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+          DIR="${BACKUP_ROOT}/${STAMP}"
+
+          sudo mkdir -p "${DIR}"
+          sudo chown "$(id -u):$(id -g)" "${BACKUP_ROOT}" "${DIR}"
+
+          export AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}"
+          export AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}"
+          export AWS_DEFAULT_REGION="auto"
+
+          R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+          pg_dump -Fc -d "${PGDATABASE}" -f "${DIR}/database.dump"
+          pg_dumpall --globals-only > "${DIR}/globals.sql"
+          sha256sum "${DIR}/database.dump" "${DIR}/globals.sql" > "${DIR}/SHA256SUMS"
+
+          aws s3 cp "${DIR}/database.dump" "s3://${R2_BUCKET}/${R2_PREFIX}/${STAMP}/database.dump" \
+            --endpoint-url "${R2_ENDPOINT}"
+          aws s3 cp "${DIR}/globals.sql" "s3://${R2_BUCKET}/${R2_PREFIX}/${STAMP}/globals.sql" \
+            --endpoint-url "${R2_ENDPOINT}"
+          aws s3 cp "${DIR}/SHA256SUMS" "s3://${R2_BUCKET}/${R2_PREFIX}/${STAMP}/SHA256SUMS" \
+            --endpoint-url "${R2_ENDPOINT}"
+
+          find "${BACKUP_ROOT}" -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf {} \;
+
+          echo "Backup uploaded to s3://${R2_BUCKET}/${R2_PREFIX}/${STAMP}/"
+          REMOTE_SCRIPT
