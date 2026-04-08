@@ -1,0 +1,95 @@
+= Backups
+
+This repository ships a nightly GitHub Actions workflow for Supabase database backups:
+
+* Workflow file: `.github/workflows/nightly-supabase-backup.yml`
+* Schedule: daily at `05:15 UTC`
+* Trigger: automatic nightly run or manual `workflow_dispatch`
+* Target: the live server over SSH
+* Storage: Cloudflare R2 bucket `9kit-db-backups`
+
+The workflow does not dump PostgreSQL from the GitHub runner. It connects to the deployment host, runs `pg_dump` and `pg_dumpall` against the live `supabase-db` container, writes checksum files, and uploads the artifacts to R2.
+
+== Required GitHub Secrets
+
+The workflow expects these repository secrets:
+
+* `BACKUP_SSH_HOST`
+* `BACKUP_SSH_PORT`
+* `BACKUP_SSH_USER`
+* `BACKUP_SSH_PRIVATE_KEY`
+* `BACKUP_SSH_KNOWN_HOSTS`
+* `SUPABASE_DB_PASSWORD`
+* `R2_ACCESS_KEY_ID`
+* `R2_SECRET_ACCESS_KEY`
+* `R2_BUCKET`
+* `R2_ACCOUNT_ID`
+* `R2_PREFIX`
+
+The current repo source of truth for those values is the encrypted SOPS file:
+
+* `secrets/github-actions-backup.sops.yaml`
+
+Values are synced from that file into GitHub Actions secrets.
+
+== Backup Artifacts
+
+Each run writes a timestamped backup set under the configured R2 prefix:
+
+[source,text]
+----
+s3://9kit-db-backups/supabase-db/<timestamp>/
+----
+
+Each backup set contains:
+
+* `database.dump`
+* `globals.sql`
+* `SHA256SUMS`
+
+The workflow also keeps a short-lived local cache on the server under:
+
+[source,text]
+----
+/var/backups/supabase
+----
+
+Local directories older than 7 days are deleted after each run.
+
+== Manual Run
+
+To trigger a backup manually:
+
+1. Open the GitHub Actions tab for this repository.
+2. Select `Nightly Supabase Backup`.
+3. Click `Run workflow`.
+
+Or use the GitHub CLI:
+
+[source,bash]
+----
+gh workflow run nightly-supabase-backup.yml --repo 9kit-com/ansible-supabase --ref main
+----
+
+== Restore
+
+Download the backup set you want from R2, then restore in this order:
+
+1. Restore globals if needed.
+2. Restore the database dump.
+
+Example commands:
+
+[source,bash]
+----
+docker exec -i supabase-db psql -U postgres -d postgres < globals.sql
+docker exec -i supabase-db pg_restore -U postgres -d postgres --clean --if-exists < database.dump
+----
+
+Adjust the restore flow if you are restoring into a fresh instance or need to recreate roles first.
+
+== Operational Notes
+
+* The workflow uses SSH plus Docker on the remote host, so the target server must keep Docker available to the backup user.
+* The PostgreSQL password is read from the same deployment credentials already used by the stack.
+* R2 uploads are performed with the official AWS CLI container image and the Cloudflare R2 S3-compatible endpoint.
