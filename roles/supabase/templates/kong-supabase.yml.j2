@@ -273,3 +273,14 @@ services:
           hide_groups_header: true
           allow:
             - admin
+
+  - name: dashboard
+    _comment: 'Studio: /* -> http://studio:3000/*'
+    url: http://studio:3000/
+    routes:
+      - name: dashboard-all
+        strip_path: true
+        paths:
+          - /
+    plugins:
+      - name: cors
