@@ -56,6 +56,10 @@ services:
     container_name: supabase-kong
     image: kong/kong:{{ sb_kong_version }}
     restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 4096
     networks:
       default:
         aliases:
@@ -124,7 +128,6 @@ services:
       GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP}
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_JWT_AUD: authenticated
-      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_JWT_EXP: ${JWT_EXPIRY}
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_EXTERNAL_EMAIL_ENABLED: ${ENABLE_EMAIL_SIGNUP}
