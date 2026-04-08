@@ -82,7 +82,7 @@ jobs:
 
           R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
           DB_CONTAINER="supabase-db"
-          AWS_CLI_IMAGE="public.ecr.aws/aws-cli/aws-cli:2"
+          AWS_CLI_IMAGE="amazon/aws-cli"
 
           docker exec \
             -e PGPASSWORD="${SUPABASE_DB_PASSWORD}" \
