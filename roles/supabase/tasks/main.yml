@@ -34,6 +34,7 @@
   with_items:
     - { src: "docker-compose-supabase.yml", dest: "/home/{{ deploy_user }}/{{ supabase_path }}/docker-compose-supabase.yml", mode: '0664' }
     - { src: "kong-supabase.yml", dest: "/home/{{ deploy_user }}/{{ supabase_path }}/{{ kong_conf_path }}/kong.yml", mode: '0664' }
+    - { src: "kong-entrypoint.sh", dest: "/home/{{ deploy_user }}/{{ supabase_path }}/{{ kong_conf_path }}/kong-entrypoint.sh", mode: '0755' }
     - { src: "env-supabase", dest: "/home/{{ deploy_user }}/{{ supabase_path }}/.env", mode: '0664' }
     - { src: "start-supabase.sh", dest: "/home/{{ deploy_user }}/{{ supabase_path }}/start-supabase.sh", mode: '0755' }
 
