@@ -46,7 +46,7 @@ services:
 
   kong:
     container_name: supabase-kong
-    image: kong:{{ sb_kong_version }}
+    image: kong/kong:{{ sb_kong_version }}
     restart: unless-stopped
     # https://unix.stackexchange.com/a/294837
     entrypoint: bash -c 'eval "echo \"$$(cat ~/temp.yml)\"" > ~/kong.yml && /docker-entrypoint.sh kong docker-start'
@@ -547,4 +547,3 @@ services:
 
 volumes:
   db-config:
-
