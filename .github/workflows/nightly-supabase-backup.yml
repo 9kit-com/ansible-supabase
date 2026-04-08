@@ -64,16 +64,10 @@ jobs:
              bash -s" <<'REMOTE_SCRIPT'
           set -euo pipefail
 
-          if ! command -v pg_dump >/dev/null 2>&1 || ! command -v aws >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y postgresql-client awscli
+          if ! command -v docker >/dev/null 2>&1; then
+            echo "docker is required on the remote host" >&2
+            exit 1
           fi
-
-          export PGHOST="127.0.0.1"
-          export PGPORT="5432"
-          export PGUSER="postgres"
-          export PGPASSWORD="${SUPABASE_DB_PASSWORD}"
-          export PGDATABASE="postgres"
 
           BACKUP_ROOT="/var/backups/supabase"
           STAMP="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
@@ -87,16 +81,43 @@ jobs:
           export AWS_DEFAULT_REGION="auto"
 
           R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          DB_CONTAINER="supabase-db"
 
-          pg_dump -Fc -d "${PGDATABASE}" -f "${DIR}/database.dump"
-          pg_dumpall --globals-only > "${DIR}/globals.sql"
+          docker exec \
+            -e PGPASSWORD="${SUPABASE_DB_PASSWORD}" \
+            "${DB_CONTAINER}" \
+            pg_dump -h 127.0.0.1 -p 5432 -U postgres -d postgres -Fc \
+            > "${DIR}/database.dump"
+          docker exec \
+            -e PGPASSWORD="${SUPABASE_DB_PASSWORD}" \
+            "${DB_CONTAINER}" \
+            pg_dumpall -h 127.0.0.1 -p 5432 -U postgres --globals-only \
+            > "${DIR}/globals.sql"
           sha256sum "${DIR}/database.dump" "${DIR}/globals.sql" > "${DIR}/SHA256SUMS"
 
-          aws s3 cp "${DIR}/database.dump" "s3://${R2_BUCKET}/${R2_PREFIX}/${STAMP}/database.dump" \
+          docker run --rm \
+            -v "${DIR}:/backup:ro" \
+            -e AWS_ACCESS_KEY_ID \
+            -e AWS_SECRET_ACCESS_KEY \
+            -e AWS_DEFAULT_REGION \
+            amazon/aws-cli:2 \
+            s3 cp /backup/database.dump "s3://${R2_BUCKET}/${R2_PREFIX}/${STAMP}/database.dump" \
             --endpoint-url "${R2_ENDPOINT}"
-          aws s3 cp "${DIR}/globals.sql" "s3://${R2_BUCKET}/${R2_PREFIX}/${STAMP}/globals.sql" \
+          docker run --rm \
+            -v "${DIR}:/backup:ro" \
+            -e AWS_ACCESS_KEY_ID \
+            -e AWS_SECRET_ACCESS_KEY \
+            -e AWS_DEFAULT_REGION \
+            amazon/aws-cli:2 \
+            s3 cp /backup/globals.sql "s3://${R2_BUCKET}/${R2_PREFIX}/${STAMP}/globals.sql" \
             --endpoint-url "${R2_ENDPOINT}"
-          aws s3 cp "${DIR}/SHA256SUMS" "s3://${R2_BUCKET}/${R2_PREFIX}/${STAMP}/SHA256SUMS" \
+          docker run --rm \
+            -v "${DIR}:/backup:ro" \
+            -e AWS_ACCESS_KEY_ID \
+            -e AWS_SECRET_ACCESS_KEY \
+            -e AWS_DEFAULT_REGION \
+            amazon/aws-cli:2 \
+            s3 cp /backup/SHA256SUMS "s3://${R2_BUCKET}/${R2_PREFIX}/${STAMP}/SHA256SUMS" \
             --endpoint-url "${R2_ENDPOINT}"
 
           find "${BACKUP_ROOT}" -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf {} \;
