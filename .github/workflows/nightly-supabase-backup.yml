@@ -82,6 +82,7 @@ jobs:
 
           R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
           DB_CONTAINER="supabase-db"
+          AWS_CLI_IMAGE="public.ecr.aws/aws-cli/aws-cli:2"
 
           docker exec \
             -e PGPASSWORD="${SUPABASE_DB_PASSWORD}" \
@@ -100,7 +101,7 @@ jobs:
             -e AWS_ACCESS_KEY_ID \
             -e AWS_SECRET_ACCESS_KEY \
             -e AWS_DEFAULT_REGION \
-            amazon/aws-cli:2 \
+            "${AWS_CLI_IMAGE}" \
             s3 cp /backup/database.dump "s3://${R2_BUCKET}/${R2_PREFIX}/${STAMP}/database.dump" \
             --endpoint-url "${R2_ENDPOINT}"
           docker run --rm \
@@ -108,7 +109,7 @@ jobs:
             -e AWS_ACCESS_KEY_ID \
             -e AWS_SECRET_ACCESS_KEY \
             -e AWS_DEFAULT_REGION \
-            amazon/aws-cli:2 \
+            "${AWS_CLI_IMAGE}" \
             s3 cp /backup/globals.sql "s3://${R2_BUCKET}/${R2_PREFIX}/${STAMP}/globals.sql" \
             --endpoint-url "${R2_ENDPOINT}"
           docker run --rm \
@@ -116,7 +117,7 @@ jobs:
             -e AWS_ACCESS_KEY_ID \
             -e AWS_SECRET_ACCESS_KEY \
             -e AWS_DEFAULT_REGION \
-            amazon/aws-cli:2 \
+            "${AWS_CLI_IMAGE}" \
             s3 cp /backup/SHA256SUMS "s3://${R2_BUCKET}/${R2_PREFIX}/${STAMP}/SHA256SUMS" \
             --endpoint-url "${R2_ENDPOINT}"
 
